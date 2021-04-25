@@ -16,33 +16,37 @@ using namespace std;
 
 int main(){
     srand (1999);
-    const float sigma = 0.15;
-    gaussian_variable W(0.015,0.15);
+    //const float sigma = 0.15;
+   
     float T=2;
     float K =1;
     float S_0=1;
-    
-    ofstream fichier("european_vanilla_options.txt", ios::out| ios::trunc);
+    ofstream fichier("Q_14.txt", ios::out| ios::trunc);
     if(fichier){
-        for( int N=30; N<=30000000000 ; N =N*2){
-            float mean_estim= 0.;
-            float std_estim = 0.;
-            for(int i=1; i<=N;i++){
-                float c =gaussian_output(T);
-                float S_T = S_0*exp((W.mean-pow(sigma,2)/2)*T + sigma*c);
-                if (K-S_T>0){mean_estim += (K-S_T);};
-                std_estim += pow(fmax(0,K-S_T)*exp(-W.mean*T),2);
-            }
-            mean_estim = exp(-W.mean*T)*(mean_estim/(N));
-            std_estim = (std_estim/N -pow(mean_estim,2)*exp(-2*W.mean*T))*(N/(N-1));
-            std_estim = sqrt(std_estim);
-            float inf_born = mean_estim - 1.645*std_estim/sqrt(N);
-            float sup_born = mean_estim + 1.645*std_estim/sqrt(N);
-            float err = 1.96*std_estim/sqrt(N);
-            fichier<<N<<'\t'<<mean_estim<<'\t'<<inf_born<<'\t'<<sup_born<<'\t'<< err <<endl;
+        float sigma = 0.15;
+        gaussian_variable W(0.015,sigma);
+        initial_conditions cond(2,1./52,104,1,0.7,S_0);
+        for( int N=100; N<=1E7 ; N *=2){
+            monte_carlo_output output = control_monte_carlo_down_in( cond, W, N);
+            fichier<<N<<'\t'<<output.mean_estim<<'\t'<<output.inf_born<<'\t'<<output.sup_born<<'\t'<<output. err <<endl;
+            //cout<<N<<endl;
         }
-        fichier<<vanilla_eur_option( W, T, K, S_0)<<endl;
-    
+        
+       /*
+        for (int i=0; i<= 1000; i++){
+            float t = (float) i/1000;
+            float B = (1-t)*0.5+ t;
+            float sigma =0.15;
+            gaussian_variable W(0.015,sigma);
+            initial_conditions cond(2,1./52,104,1,B,S_0);
+            monte_carlo_output output = monte_carlo_option_down_put( cond, W, 10000);
+            fichier<<B<<'\t'<<output.mean_estim<<'\t'<<output.inf_born<<'\t'<<output.sup_born<<'\t'<<output. err <<endl;
+            cout<<i<<endl;
+
+        } 
+        //fichier<<vanilla_eur_option( W, T, K, S_0)<<endl;
+        */
+
     }
 
     fichier.close();
