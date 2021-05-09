@@ -50,13 +50,19 @@ class monte_carlo_output{
         mean_estim = mean; std_estim=std; inf_born = inf; sup_born =sup; err = er;
     }
 };
-float gaussian_output(float T);
+float gaussian_output(float );
 float abramowitz_stegun_int(float);
 float vanilla_eur_option( gaussian_variable ,float ,float ,float );
 monte_carlo_output monte_carlo_option_down_put(initial_conditions ,gaussian_variable, int);
 float mini(list<float> );
 monte_carlo_output anti_monte_carlo_option_down_put(initial_conditions ,gaussian_variable , int );
-float h(initial_conditions , float , gaussian_variable );
+float h(initial_conditions ,float , gaussian_variable );
 monte_carlo_output monte_carlo_vanilla_options(initial_conditions , gaussian_variable , int );
 float h_anti(initial_conditions , float , gaussian_variable );
 monte_carlo_output control_monte_carlo_down_in(initial_conditions, gaussian_variable, int);
+monte_carlo_output monte_carlo_option_down_out_proba_non_sortie(initial_conditions ,gaussian_variable , int );
+float h_avec_proba(initial_conditions , float ,gaussian_variable );
+float ev_non_sortie_delta(initial_conditions cond,float X_T,gaussian_variable W);
+monte_carlo_output monte_carlo_proba_non_sortie_delta(initial_conditions cond,gaussian_variable W, int trajec);
+float proba_non_sortie(initial_conditions cond,float X_T,gaussian_variable W);
+monte_carlo_output monte_carlo_proba_non_sortie(initial_conditions cond,gaussian_variable W, int trajec);

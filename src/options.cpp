@@ -87,6 +87,7 @@ monte_carlo_output monte_carlo_vanilla_options(initial_conditions cond, gaussian
       float K = cond.K;
       float mean_estim= 0.;
       float std_estim = 0.;
+      //#pragma omp parallel for
       for(int i=1; i<=N;i++){
       float c =gaussian_output(T);
       float S_T = S_0*exp((W.mean-pow(sigma,2)/2)*T + sigma*c);
@@ -94,7 +95,7 @@ monte_carlo_output monte_carlo_vanilla_options(initial_conditions cond, gaussian
       std_estim += pow(fmax(0,K-S_T)*exp(-W.mean*T),2);
       }
       mean_estim = exp(-W.mean*T)*(mean_estim/(N));
-      std_estim = (std_estim/N -pow(mean_estim,2)*exp(-2*W.mean*T))*(N/(N-1));
+      std_estim = (std_estim/N -pow(mean_estim,2))*(N/(N-1));
       std_estim = sqrt(std_estim);
       float err = 1.645*std_estim/sqrt(N);
       float inf_born = mean_estim - err;
@@ -109,11 +110,11 @@ monte_carlo_output monte_carlo_vanilla_options(initial_conditions cond, gaussian
 ////////////////////////////////////////////////////
 
 //Fonction auxiliaire h
-float h(initial_conditions cond, float X, gaussian_variable W){
+float h(initial_conditions cond, float X_T,gaussian_variable W){
    float r = W.mean;
    float sigma = W.std;
    int T = cond.T;
-   float inter1 = cond.S_0*exp((r-pow(sigma,2)/2)*T+sigma*sqrt(T)*X);
+   float inter1 = cond.S_0*exp((r-pow(sigma,2)/2)*T+sigma*sqrt(T)*X_T);
    if (cond.K<inter1){
        return 0.;
    } 
@@ -124,10 +125,16 @@ float h(initial_conditions cond, float X, gaussian_variable W){
         int i =1;
         // First we create a  list of W_T_i output 
         for (iter= S_list.begin() ; iter != S_list.end(); iter++){
-            float t = i*cond.delta;
-            float c = cond.S_0*exp((r-pow(sigma,2)/2)*t+sigma*sqrt(t)*X);
-            *iter = c;
-            i ++;
+            if (iter==S_list.end()){
+                *iter = inter1;
+            }
+            else{
+                float X_i = gaussian_output(1);
+                float t = i*cond.delta;
+                float c = cond.S_0*exp((r-pow(sigma,2)/2)*t+sigma*sqrt(t)*X_i);
+                *iter = c;
+                i ++;
+            }
         };
         float S_min = mini( S_list);
         if (S_min>=cond.B){
@@ -140,11 +147,11 @@ float h(initial_conditions cond, float X, gaussian_variable W){
 }
 
 // Fonction auxiliaire h_anti qui sert à calculer P_DI
-float h_anti(initial_conditions cond, float X, gaussian_variable W){
+float h_anti(initial_conditions cond, float X_T, gaussian_variable W){
    float r = W.mean;
    float sigma = W.std;
    int T = cond.T;
-   float inter1 = cond.S_0*exp((r-pow(sigma,2)/2)*T+sigma*sqrt(T)*X);
+   float inter1 = cond.S_0*exp((r-pow(sigma,2)/2)*T+sigma*sqrt(T)*X_T);
    if (cond.K<inter1){
        return 0.;
    } 
@@ -155,10 +162,16 @@ float h_anti(initial_conditions cond, float X, gaussian_variable W){
         int i =1;
         // First we create a  list of W_T_i output 
         for (iter= S_list.begin() ; iter != S_list.end(); iter++){
-            float t = i*cond.delta;
-            float c = cond.S_0*exp((r-pow(sigma,2)/2)*t+sigma*sqrt(t)*X);
-            *iter = c;
-            i ++;
+            if (iter == S_list.end()){
+                *iter = inter1;
+            }
+            else{
+                float X_i = gaussian_output(1);
+                float t = i*cond.delta;
+                float c = cond.S_0*exp((r-pow(sigma,2)/2)*t+sigma*sqrt(t)*X_i);
+                *iter = c;
+                i ++;
+            }
         };
         float S_min = mini( S_list);
         if (S_min<=cond.B){
@@ -170,6 +183,56 @@ float h_anti(initial_conditions cond, float X, gaussian_variable W){
    }
 }
 
+// On intègre le produit des probas
+float h_avec_proba(initial_conditions cond,float X_T, gaussian_variable W){
+   float r = W.mean;
+   float sigma = W.std;
+   int T = cond.T;
+   float inter1 = cond.S_0*exp((r-pow(sigma,2)/2)*T+sigma*sqrt(T)*X_T);
+   if (cond.K<inter1){
+       return 0.;
+   } 
+   else {
+       // Simulation de l'indicatrice du minimum
+        list<float> S_list = list<float> (cond.N_delta);
+        list<float>::iterator iter= S_list.begin();
+        int i =1;
+        // First we create a  list of W_T_i output 
+        for (iter= S_list.begin() ; iter != S_list.end(); iter++){
+            if (iter==S_list.end()){
+                *iter =  inter1;
+            }
+            else{
+                float X_i = gaussian_output(1);
+                float t = i*cond.delta;
+                float c = cond.S_0*exp((r-pow(sigma,2)/2)*t+sigma*sqrt(t)*X_i);
+                *iter = c;
+                i ++;
+            }
+        };
+        float S_min = mini( S_list);
+        if (S_min>=cond.B){
+            float prod_proba =1.;
+            list<float>::iterator it= S_list.begin();
+            float previous = *it;
+            it ++;
+            for(;it != S_list.end(); it ++){
+                if (*it > cond.B && previous > cond.B){
+                    //cout<<(exp(-2*(*it-cond.B)*(previous- cond.B)*cond.delta))<<endl;
+                    prod_proba = prod_proba* (exp(-2*(*it-cond.B)*(previous- cond.B)*cond.delta));
+                }
+                previous = *it;
+            }
+           //cout<<exp(-r*T)*(cond.K-inter1)*prod_proba<<endl;
+            return exp(-r*T)*(cond.K-inter1)*prod_proba;
+        }
+        else {
+            return 0.;
+        }
+   }
+}
+
+//Monte Carlo classique 
 monte_carlo_output monte_carlo_option_down_put(initial_conditions cond,gaussian_variable W, int trajec){
     float r = W.mean;
     float sigma = W.std;
@@ -178,9 +241,10 @@ monte_carlo_output monte_carlo_option_down_put(initial_conditions cond,gaussian_
     float inf_born =0;
     float sup_born =0;
     float err =0;
+    //#pragma omp parallel for
     for(int j=1; j<= trajec ;j++){
-        float X_i = gaussian_output(1);
-        float inter = h(cond,X_i,W);
+        float X_T = gaussian_output(1);
+        float inter = h(cond,X_T,W);
         mean_estim += inter;
         std_estim += pow(inter,2);
     }
@@ -195,26 +259,55 @@ monte_carlo_output monte_carlo_option_down_put(initial_conditions cond,gaussian_
     return output;
 }
 
+//Integration des probabilité de non sortie 
+monte_carlo_output monte_carlo_option_down_out_proba_non_sortie(initial_conditions cond,gaussian_variable W, int trajec)
+{
+    float r = W.mean;
+    float sigma = W.std;
+    float mean_estim =0;
+    float std_estim =0;
+    float inf_born =0;
+    float sup_born =0;
+    float err =0;
+    //#pragma omp parallel for
+    for(int j=1; j<= trajec ;j++){
+        float X_T = gaussian_output(1); //On calcule X_T ici 
+        float inter = h_avec_proba(cond,X_T,W);
+        mean_estim += inter;
+        std_estim += pow(inter,2);
+    }
+    mean_estim = mean_estim/(trajec);
+    std_estim = std_estim/trajec -pow(mean_estim,2);
+    std_estim = (trajec/(trajec-1)) * std_estim;
+    std_estim = sqrt(std_estim);
+    err = 1.645*std_estim/sqrt(trajec);
+    inf_born = mean_estim - err;
+    sup_born = mean_estim + err;
+    monte_carlo_output output(mean_estim, std_estim, inf_born , sup_born, err);
+    return output;
+
+}
+
+
 // Reducion de la variance par variables antithétiques 
-
-
 monte_carlo_output anti_monte_carlo_option_down_put(initial_conditions cond,gaussian_variable W, int trajec){
     float mean_estim =0.;
     float std_estim =0.;
     float err =0.;
     float inf_born=0.;
     float sup_born =0.;
-    for (int i=1; i<= trajec/2; i++){
+    //#pragma omp parallel for
+    for (int i=1; i<= trajec; i++){
         float X_i = gaussian_output(1); // Gaussienne centrée réduite 
         float inter = h(cond, X_i,W)+h(cond, -X_i, W);
         mean_estim += inter;
         std_estim  += pow(inter,2);
     }
-    mean_estim = 1./trajec* mean_estim;
-    std_estim = 1./trajec* std_estim;
+    mean_estim = 1./(2*trajec)* mean_estim;
+    std_estim = 1./(2*trajec)* std_estim;
     std_estim = std_estim - pow(mean_estim,2);
-    std_estim = (trajec/(trajec-1) )* std_estim;
-    err = 1.645*sqrt(std_estim)/sqrt(trajec);
+    std_estim = (2*trajec/(2*trajec-1) )* std_estim;
+    err = 1.645*sqrt(std_estim)/sqrt(2*trajec);
     inf_born = mean_estim - err;
     sup_born = mean_estim +err;
     monte_carlo_output output(mean_estim, std_estim, inf_born , sup_born, err);
@@ -231,7 +324,7 @@ monte_carlo_output control_monte_carlo_down_in(initial_conditions cond, gaussian
     float sup_born =0;
     float err =0;
     float price =vanilla_eur_option( W, cond.T, cond.K, cond.S_0);
-    #pragma omp parallel for
+    //#pragma omp parallel for
     for(int j=1; j<= trajec ;j++){
         float X_i = gaussian_output(1);
         float inter = h_anti(cond,X_i,W);
@@ -250,3 +343,4 @@ monte_carlo_output control_monte_carlo_down_in(initial_conditions cond, gaussian
     monte_carlo_output output(mean_estim, std_estim, inf_born , sup_born, err);
     return output;
 }
+
